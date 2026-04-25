@@ -1,116 +1,135 @@
 # passmake
 
-`passmake` is a small Linux command line password generator written in C.
-It prints a cryptographically secure password made from uppercase letters,
+`passmake` is a tiny Linux command line password generator written in C. It
+prints a cryptographically secure alphanumeric password using uppercase letters,
 lowercase letters, and numbers.
 
-Successful password generation writes only the generated password to standard
-output. Errors and help text are separate from normal password output.
+The normal generation path writes only the password to stdout. Warnings and
+errors go to stderr. Help, version, and security text are printed only when
+explicitly requested.
 
 ## Build
-
-`passmake` builds with a standard C compiler and `make`.
-
-On Debian or Ubuntu, install the build tools if needed:
-
-```sh
-sudo apt install build-essential
-```
-
-On Fedora:
-
-```sh
-sudo dnf install make gcc
-```
-
-Build the executable:
 
 ```sh
 make
 ```
 
-This creates the `passmake` executable:
+That creates `./passmake`.
+
+Run a small built-in smoke check:
 
 ```sh
-./passmake 32
+make check
 ```
 
-You can also compile it directly without `make`:
-
-```sh
-cc -std=c11 -O2 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Wstrict-prototypes -o passmake main.c
-```
-
-To confirm the build works:
-
-```sh
-./passmake 32
-./passmake --help
-./passmake --security
-```
-
-Remove the built executable:
+Remove the executable:
 
 ```sh
 make clean
 ```
 
+Install the binary:
+
+```sh
+sudo make install
+```
+
+Install somewhere else:
+
+```sh
+make PREFIX="$HOME/.local" install
+```
+
 ## Usage
 
-The simplest and preferred form is positional:
+Generate the default 24-character password:
 
 ```sh
-./passmake COUNT
+./passmake
 ```
 
-Examples:
+Generate a specific length:
 
 ```sh
-./passmake 16
+./passmake 24
 ./passmake 32
-./passmake 64
 ```
 
-Optional long-form arguments are also supported:
+Use named length options if desired:
 
 ```sh
-./passmake --length 32
-./passmake --length=32
-./passmake --count 32
-./passmake --count=32
+./passmake --length 24
+./passmake --length=24
 ```
 
-Suppress the trailing newline when embedding the password in another command:
+`--count` is accepted as a compatibility alias:
 
 ```sh
-./passmake 32 --no-newline
+./passmake --count 24
+./passmake --count=24
 ```
 
-Show help:
+Suppress the default trailing newline:
+
+```sh
+./passmake 24 --no-newline
+```
+
+This is useful when piping into clipboard tools:
+
+```sh
+./passmake 24 --no-newline | your-clipboard-command
+```
+
+Show help, version, or the security explanation:
 
 ```sh
 ./passmake --help
-```
-
-Explain the program's cryptographic security design:
-
-```sh
+./passmake --version
 ./passmake --security
 ```
 
-## Password Rules
+Arguments after `--` are treated as positional values:
 
-- Length must be between 3 and 4096 characters.
-- Characters are limited to `A-Z`, `a-z`, and `0-9`.
-- Every generated password contains at least one uppercase letter, one lowercase
-  letter, and one digit.
+```sh
+./passmake -- 24
+```
 
-## Security Notes
+## Lengths
 
-- Random bytes come from Linux `getrandom(2)`, with `/dev/urandom` used only as
-  a compatibility fallback if `getrandom` is unavailable.
-- Character selection uses rejection sampling to avoid modulo bias.
-- Passwords are generated uniformly from the accepted password set instead of
-  forcing required character classes into fixed positions.
-- Temporary password and random-byte buffers are cleared before the program
-  exits.
+- Default length: 24 characters.
+- Recommended website password length: 24 or more characters.
+- Valid range: 3 to 4096 characters.
+- Lengths below 12 are allowed but warn to stderr unless `--quiet` is used.
+- The minimum length is mechanical, not recommended. It exists only because the
+  program enforces at least one uppercase letter, one lowercase letter, and one
+  digit.
+
+## Security
+
+- Randomness comes from Linux `getrandom(2)`.
+- `/dev/urandom` is used only as a compatibility fallback if `getrandom(2)` is
+  unavailable.
+- The alphabet is intentionally alphanumeric: `A-Z`, `a-z`, and `0-9`.
+- Rejection sampling avoids modulo bias when mapping random bytes to characters.
+- Whole-password rejection keeps output uniform over the subset of alphanumeric
+  strings that satisfy the uppercase, lowercase, and digit requirement.
+- Password output uses unbuffered descriptor writes to avoid libc-managed stdout
+  buffers holding password material.
+- Random-byte and password buffers are cleared before exit to reduce residual
+  exposure. This is a hardening measure, not an absolute guarantee.
+- Core dumps are disabled during password generation where supported.
+
+Printing to a terminal can leave the password visible in terminal scrollback.
+`passmake` does not put generated passwords in shell history by itself, but
+command substitution, environment variables, or manual handling can expose them.
+Avoid storing generated passwords in environment variables, and store generated
+passwords in a password manager.
+
+## Exit Status
+
+- `0`: success
+- `2`: usage or argument error
+- `3`: randomness or generation failure
+- `4`: memory allocation failure
+- `5`: stdout write failure
